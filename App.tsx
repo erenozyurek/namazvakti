@@ -6,8 +6,11 @@ import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import { CompassScreen } from './src/screens/CompassScreen';
+import { DualarScreen } from './src/screens/DualarScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ZikirmatikScreen } from './src/screens/ZikirmatikScreen';
+
 
 const Tab = createBottomTabNavigator();
 
@@ -15,6 +18,7 @@ export default function App() {
   return (
     <NavigationContainer>
       <Tab.Navigator
+        initialRouteName="Ana Sayfa"
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarStyle: styles.tabBar,
@@ -27,6 +31,10 @@ export default function App() {
 
             if (route.name === 'Ana Sayfa') {
               iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'Dualar') {
+              iconName = focused ? 'book' : 'book-outline';
+            } else if (route.name === 'Zikirmatik') {
+              iconName = focused ? 'list' : 'list-outline';
             } else if (route.name === 'Pusula') {
               iconName = focused ? 'compass' : 'compass-outline';
             } else if (route.name === 'Ayarlar') {
@@ -48,6 +56,20 @@ export default function App() {
           ),
         })}
       >
+        <Tab.Screen
+          name="Dualar"
+          component={DualarScreen}
+          options={{
+            tabBarLabel: 'Dualar',
+          }}
+        />
+        <Tab.Screen
+          name="Zikirmatik"
+          component={ZikirmatikScreen}
+          options={{
+            tabBarLabel: 'Zikirmatik',
+          }}
+        />
         <Tab.Screen
           name="Ana Sayfa"
           component={HomeScreen}
