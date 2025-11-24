@@ -1,27 +1,29 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  console.log('TabLayout rendering'); // Debug log
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#FFD700',
+        tabBarInactiveTintColor: '#CCCCCC',
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarStyle: Platform.select({
-          ios: {
-            position: 'absolute',
-          },
-          default: {},
-        }),
+        tabBarStyle: {
+          backgroundColor: 'rgba(20, 20, 30, 0.95)',
+          borderTopColor: 'rgba(255, 215, 0, 0.2)',
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
       }}>
       <Tabs.Screen
         name="zikirmatik"
