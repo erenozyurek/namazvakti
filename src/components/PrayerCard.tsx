@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -8,22 +8,22 @@ interface PrayerCardProps {
   isNext?: boolean;
 }
 
-const getPrayerIcon = (name: string): keyof typeof Ionicons.glyphMap => {
+const getPrayerIcon = (name: string): keyof typeof MaterialCommunityIcons.glyphMap => {
   switch (name) {
     case 'İmsak':
-      return 'sunny-outline';
+      return 'weather-sunset-up';
     case 'Güneş':
-      return 'sunny';
+      return 'white-balance-sunny';
     case 'Öğle':
-      return 'partly-sunny-outline';
+      return 'weather-sunny';
     case 'İkindi':
-      return 'cloudy-outline';
+      return 'weather-sunset-down';
     case 'Akşam':
-      return 'moon';
+      return 'weather-night';
     case 'Yatsı':
-      return 'moon-outline';
+      return 'moon-waning-crescent';
     default:
-      return 'time-outline';
+      return 'clock-outline';
   }
 };
 
@@ -33,7 +33,7 @@ export const PrayerCard: React.FC<PrayerCardProps> = ({ name, time, isNext = fal
       <View style={styles.content}>
         <View style={styles.leftContent}>
           <View style={[styles.iconContainer, isNext && styles.nextIconContainer]}>
-            <Ionicons 
+            <MaterialCommunityIcons 
               name={getPrayerIcon(name)} 
               size={24} 
               color={isNext ? '#FFD700' : '#FFFFFF'} 
@@ -45,7 +45,7 @@ export const PrayerCard: React.FC<PrayerCardProps> = ({ name, time, isNext = fal
           <Text style={[styles.time, isNext && styles.nextTime]}>{time}</Text>
           {isNext && (
             <View style={styles.activeBadge}>
-              <Ionicons name="notifications" size={12} color="#FFD700" />
+              <MaterialCommunityIcons name="bell-ring" size={12} color="#FFD700" />
             </View>
           )}
         </View>

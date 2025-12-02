@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -13,22 +13,22 @@ export const NextPrayerCard: React.FC<NextPrayerCardProps> = ({ name, time, rema
     <View style={styles.container}>
       <View style={styles.content}>
         <View style={styles.labelContainer}>
-          <Ionicons name="star" size={16} color="#FFD700" />
+          <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
           <Text style={styles.label}>Bir Sonraki Vakit</Text>
         </View>
         
         <View style={styles.mainContent}>
-          <Ionicons name="moon" size={40} color="#FFD700" style={styles.prayerIcon} />
+          <MaterialCommunityIcons name="moon-waning-crescent" size={40} color="#FFD700" style={styles.prayerIcon} />
           <Text style={styles.prayerName}>{name}</Text>
         </View>
         
         <View style={styles.timeContainer}>
-          <Ionicons name="time" size={32} color="#FFFFFF" />
+          <MaterialCommunityIcons name="clock-outline" size={32} color="#FFFFFF" />
           <Text style={styles.prayerTime}>{time}</Text>
         </View>
         
         <View style={styles.remainingContainer}>
-          <Ionicons name="hourglass-outline" size={18} color="#FFD700" />
+          <MaterialCommunityIcons name="timer-sand" size={18} color="#FFD700" />
           <Text style={styles.remainingText}>{remainingTime}</Text>
         </View>
       </View>

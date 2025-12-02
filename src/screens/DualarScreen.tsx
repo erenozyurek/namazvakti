@@ -1,5 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import {
     FlatList,
@@ -9,23 +8,30 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-import { PRAYERS } from '../data/prayers';
+import { DUALAR } from '../data/dualar';
 
-export const DualarScreen: React.FC = () => {
-  console.log('DualarScreen rendering'); // Debug log
-  const router = useRouter();
+export default function DualarScreen() {
+  const navigation = useNavigation();
 
-  const renderItem = ({ item }: { item: typeof PRAYERS[0] }) => (
+  const renderItem = ({ item }: { item: typeof DUALAR[0] }) => (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.8}
-      onPress={() => router.push({ pathname: '/dua-detail', params: { id: item.id } })}
+      onPress={() => {
+        // @ts-ignore
+        navigation.navigate('DuaDetail', {
+          id: item.id,
+          name: item.name,
+          arabic: item.arabic,
+          turkish: item.turkish,
+          meaning: item.meaning
+        });
+      }}
     >
       <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Ionicons name="chevron-forward" size={24} color="#FFD700" />
+        <Text style={styles.cardTitle}>{item.name}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -35,17 +41,16 @@ export const DualarScreen: React.FC = () => {
       source={require('../../assets/images/backgroundImg.png')}
       style={styles.background}
       resizeMode="cover"
+      fadeDuration={0}
     >
       <View style={styles.overlay} />
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Dualar</Text>
         </View>
-
         <FlatList
-          data={PRAYERS}
+          data={DUALAR}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -54,7 +59,7 @@ export const DualarScreen: React.FC = () => {
       </SafeAreaView>
     </ImageBackground>
   );
-};
+}
 
 const styles = StyleSheet.create({
   background: {
@@ -64,7 +69,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   container: {
     flex: 1,

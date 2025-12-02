@@ -105,6 +105,7 @@ export const CompassScreen: React.FC = () => {
         source={backgroundImage}
         style={styles.background}
         resizeMode="cover"
+        fadeDuration={0}
       >
         <View style={styles.overlay} />
         <SafeAreaView style={styles.container}>
@@ -121,6 +122,7 @@ export const CompassScreen: React.FC = () => {
         source={backgroundImage}
         style={styles.background}
         resizeMode="cover"
+        fadeDuration={0}
       >
         <View style={styles.overlay} />
         <SafeAreaView style={styles.container}>
@@ -135,6 +137,7 @@ export const CompassScreen: React.FC = () => {
       source={backgroundImage}
       style={styles.background}
       resizeMode="cover"
+      fadeDuration={0}
     >
       {/* Overlay için siyah katman */}
       <View style={styles.overlay} />

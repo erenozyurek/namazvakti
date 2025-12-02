@@ -1,10 +1,10 @@
 // Diyanet API servisi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DIYANET_BASE_URL = 'https://ezanvakti.herokuapp.com';
+const DIYANET_BASE_URL = 'https://api.collectapi.com/pray/all';
 const FALLBACK_API = 'https://api.aladhan.com/v1/timingsByCity';
 const CACHE_KEY_PREFIX = 'prayer_times_';
-const CACHE_VERSION = 'v1_';
+const CACHE_VERSION = 'v2_';
 
 export interface PrayerTimesResponse {
   imsak: string;
@@ -187,39 +187,40 @@ export const getTodayPrayerTimes = async (city: string): Promise<PrayerTimesResp
 };
 export const getPrayerTimesByCity = async (city: string): Promise<PrayerTimesResponse | null> => {
   try {
-    console.log('API çağrısı yapılıyor:', city);
-    const response = await fetch(`${DIYANET_BASE_URL}/vakitler/${encodeURIComponent(city)}`, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    console.log('Aladhan API çağrısı:', city);
+    // Direkt Aladhan API kullan - daha güvenilir
+    const response = await fetch(
+      `${FALLBACK_API}?city=${encodeURIComponent(city)}&country=Turkey&method=13`,
+      {
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
     
     if (!response.ok) {
-      console.warn('Diyanet API başarısız, fallback API deneniyor...');
-      return await getPrayerTimesByAladhan(city);
+      throw new Error(`API Error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('API Response:', data);
     
-    if (!data || data.length === 0) {
-      console.warn('Boş veri, fallback API deneniyor...');
-      return await getPrayerTimesByAladhan(city);
+    if (!data.data || !data.data.timings) {
+      throw new Error('Geçersiz API yanıtı');
     }
+
+    const timings = data.data.timings;
     
     return {
-      imsak: data[0]?.Imsak || '00:00',
-      gunes: data[0]?.Gunes || '00:00',
-      ogle: data[0]?.Ogle || '00:00',
-      ikindi: data[0]?.Ikindi || '00:00',
-      aksam: data[0]?.Aksam || '00:00',
-      yatsi: data[0]?.Yatsi || '00:00',
-      HicriTarihUzun: data[0]?.HicriTarihUzun,
-      MiladiTarihKisa: data[0]?.MiladiTarihKisa,
+      imsak: timings.Fajr?.split(' ')[0] || '00:00',
+      gunes: timings.Sunrise?.split(' ')[0] || '00:00',
+      ogle: timings.Dhuhr?.split(' ')[0] || '00:00',
+      ikindi: timings.Asr?.split(' ')[0] || '00:00',
+      aksam: timings.Maghrib?.split(' ')[0] || '00:00',
+      yatsi: timings.Isha?.split(' ')[0] || '00:00',
     };
   } catch (error) {
-    console.error('Diyanet API hatası:', error);
-    return await getPrayerTimesByAladhan(city);
+    console.error('API hatası:', error);
+    return null;
   }
 };
 
@@ -347,4 +348,268 @@ export const normalizeCityName = (city: string): string => {
     .replace(/ö/g, 'o')
     .replace(/Ç/g, 'C')
     .replace(/ç/g, 'c');
+};
+
+// ==================== HAFTALİK EZAN VAKİTLERİ SERVİSİ ====================
+
+const WEEKLY_CACHE_KEY_PREFIX = 'weekly_prayer_times_';
+const WEEKLY_CACHE_VERSION = 'v1_';
+
+export interface WeeklyPrayerTime {
+  date: string; // ISO 8601 format (YYYY-MM-DD)
+  gregorian: string; // Görüntüleme için formatlanmış tarih
+  hijri: string; // Hicri tarih
+  timings: {
+    imsak: string;
+    gunes: string;
+    ogle: string;
+    ikindi: string;
+    aksam: string;
+    yatsi: string;
+  };
+}
+
+export interface WeeklyCacheData {
+  city: string;
+  country: string;
+  weekStart: string; // ISO format
+  weekEnd: string; // ISO format
+  data: WeeklyPrayerTime[];
+  cachedAt: number;
+}
+
+/**
+ * Haftanın başlangıç ve bitiş tarihlerini hesaplar (Pazartesi-Pazar)
+ */
+const getWeekRange = (date: Date = new Date()): { start: Date; end: Date } => {
+  const current = new Date(date);
+  const dayOfWeek = current.getDay(); // 0=Pazar, 1=Pazartesi, ...
+  
+  // Pazartesi'ye ayarla (haftanın başlangıcı)
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const start = new Date(current);
+  start.setDate(current.getDate() + mondayOffset);
+  start.setHours(0, 0, 0, 0);
+  
+  // Pazar'a ayarla (haftanın sonu)
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  
+  return { start, end };
+};
+
+/**
+ * Tarihi ISO 8601 formatına çevirir (YYYY-MM-DD)
+ */
+const toISODate = (date: Date): string => {
+  return date.toISOString().split('T')[0];
+};
+
+/**
+ * Önbellekten haftalık vakitleri al
+ */
+const getCachedWeeklyTimes = async (
+  city: string,
+  country: string
+): Promise<WeeklyPrayerTime[] | null> => {
+  try {
+    const { start } = getWeekRange();
+    const weekStartStr = toISODate(start);
+    const cacheKey = `${WEEKLY_CACHE_KEY_PREFIX}${WEEKLY_CACHE_VERSION}${city}_${country}_${weekStartStr}`;
+    
+    const cached = await AsyncStorage.getItem(cacheKey);
+    
+    if (!cached) {
+      console.log('📭 Haftalık cache bulunamadı');
+      return null;
+    }
+
+    const cacheData: WeeklyCacheData = JSON.parse(cached);
+    
+    // Bugünün tarihi cache'deki hafta içinde mi kontrol et
+    const today = toISODate(new Date());
+    const isInCachedWeek = cacheData.data.some(day => day.date === today);
+    
+    if (!isInCachedWeek) {
+      console.log('🗓️ Cache eski (yeni haftaya girildi), siliniyor');
+      await AsyncStorage.removeItem(cacheKey);
+      return null;
+    }
+
+    console.log('✅ Haftalık cache bulundu ve geçerli');
+    return cacheData.data;
+  } catch (error) {
+    console.error('❌ Haftalık cache okuma hatası:', error);
+    return null;
+  }
+};
+
+/**
+ * Haftalık vakitleri önbelleğe kaydet
+ */
+const cacheWeeklyTimes = async (
+  city: string,
+  country: string,
+  data: WeeklyPrayerTime[]
+): Promise<void> => {
+  try {
+    const { start, end } = getWeekRange();
+    const cacheKey = `${WEEKLY_CACHE_KEY_PREFIX}${WEEKLY_CACHE_VERSION}${city}_${country}_${toISODate(start)}`;
+    
+    const cacheData: WeeklyCacheData = {
+      city,
+      country,
+      weekStart: toISODate(start),
+      weekEnd: toISODate(end),
+      data,
+      cachedAt: Date.now(),
+    };
+    
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    console.log('💾 Haftalık vakitler cache\'e kaydedildi');
+  } catch (error) {
+    console.error('❌ Haftalık cache yazma hatası:', error);
+  }
+};
+
+/**
+ * Aladhan API'den haftalık ezan vakitlerini çeker
+ * 
+ * @param city - Şehir adı (dinamik)
+ * @param country - Ülke adı (dinamik, varsayılan: Turkey)
+ * @returns Haftalık namaz vakitleri veya null (hata durumunda)
+ * 
+ * Özellikler:
+ * - Diyanet uyumlu (method=13)
+ * - ISO 8601 tarih formatı
+ * - Akıllı önbellekleme (haftalık)
+ * - İnternet hatalarını yönetir
+ */
+export const getWeeklyPrayerTimes = async (
+  city: string,
+  country: string = 'Turkey'
+): Promise<WeeklyPrayerTime[] | null> => {
+  try {
+    // 1. Önce önbelleği kontrol et
+    const cachedData = await getCachedWeeklyTimes(city, country);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    // 2. Cache yoksa veya geçersizse API'den çek
+    console.log(`🌐 API'den haftalık vakitler çekiliyor: ${city}, ${country}`);
+    
+    const { start } = getWeekRange();
+    const year = start.getFullYear();
+    const month = start.getMonth() + 1; // 0-11 -> 1-12
+    
+    // Aladhan API - Calendar endpoint (aylık veri çeker, biz sadece bu haftayı kullanırız)
+    const url = `https://api.aladhan.com/v1/calendarByCity/${year}/${month}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=13&iso8601=true`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (!result.data || result.data.length === 0) {
+      throw new Error('API\'den boş veri döndü');
+    }
+
+    // 3. Bu haftanın verilerini filtrele
+    const { start: weekStart, end: weekEnd } = getWeekRange();
+    const weekStartStr = toISODate(weekStart);
+    const weekEndStr = toISODate(weekEnd);
+    
+    const weeklyData: WeeklyPrayerTime[] = [];
+    
+    result.data.forEach((day: any) => {
+      const dateStr = day.date.gregorian.date; // DD-MM-YYYY formatında
+      const [dd, mm, yyyy] = dateStr.split('-');
+      const isoDate = `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD formatına çevir
+      
+      // Bu tarih bu haftaya ait mi?
+      if (isoDate >= weekStartStr && isoDate <= weekEndStr) {
+        const timings = day.timings;
+        
+        weeklyData.push({
+          date: isoDate,
+          gregorian: `${dd}.${mm}.${yyyy}`,
+          hijri: `${day.date.hijri.day} ${day.date.hijri.month.tr} ${day.date.hijri.year}`,
+          timings: {
+            imsak: timings.Fajr?.split(' ')[0] || '00:00',
+            gunes: timings.Sunrise?.split(' ')[0] || '00:00',
+            ogle: timings.Dhuhr?.split(' ')[0] || '00:00',
+            ikindi: timings.Asr?.split(' ')[0] || '00:00',
+            aksam: timings.Maghrib?.split(' ')[0] || '00:00',
+            yatsi: timings.Isha?.split(' ')[0] || '00:00',
+          },
+        });
+      }
+    });
+
+    // Tarihe göre sırala (Pazartesi'den başlayarak)
+    weeklyData.sort((a, b) => a.date.localeCompare(b.date));
+
+    // 4. Önbelleğe kaydet
+    await cacheWeeklyTimes(city, country, weeklyData);
+
+    // 5. Veriyi döndür
+    console.log(`✅ ${weeklyData.length} günlük veri başarıyla alındı`);
+    return weeklyData;
+
+  } catch (error) {
+    console.error('❌ Haftalık vakitler çekme hatası:', error);
+    
+    // Hata detaylarını logla
+    if (error instanceof Error) {
+      console.error('Hata mesajı:', error.message);
+    }
+    
+    // İnternet bağlantısı yoksa veya API'ye erişilemiyorsa null döndür
+    return null;
+  }
+};
+
+/**
+ * Bugünün ezan vakitlerini haftalık veriden al
+ */
+export const getTodayFromWeeklyTimes = async (
+  city: string,
+  country: string = 'Turkey'
+): Promise<PrayerTimesResponse | null> => {
+  try {
+    const weeklyData = await getWeeklyPrayerTimes(city, country);
+    
+    if (!weeklyData) {
+      return null;
+    }
+
+    const today = toISODate(new Date());
+    const todayData = weeklyData.find(day => day.date === today);
+    
+    if (!todayData) {
+      console.warn('⚠️ Bugünün verisi haftalık veride bulunamadı');
+      return null;
+    }
+
+    return {
+      imsak: todayData.timings.imsak,
+      gunes: todayData.timings.gunes,
+      ogle: todayData.timings.ogle,
+      ikindi: todayData.timings.ikindi,
+      aksam: todayData.timings.aksam,
+      yatsi: todayData.timings.yatsi,
+    };
+  } catch (error) {
+    console.error('❌ Bugünün vakitleri alınamadı:', error);
+    return null;
+  }
 };

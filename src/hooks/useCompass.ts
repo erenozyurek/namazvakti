@@ -53,13 +53,13 @@ export const useCompass = (): CompassData => {
           return;
         }
 
-        // Emülatör için timeout ekle (5 saniye)
+        // Android için daha uzun timeout (15 saniye)
         const locationPromise = Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Low,
+          accuracy: Location.Accuracy.Balanced,
         });
         
         const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Konum timeout')), 5000)
+          setTimeout(() => reject(new Error('Konum timeout')), 15000)
         );
         
         const location = await Promise.race([locationPromise, timeoutPromise]);

@@ -239,6 +239,7 @@ export const ZikirmatikScreen: React.FC = () => {
       source={require('../../assets/images/backgroundImg.png')}
       style={styles.background}
       resizeMode="cover"
+      fadeDuration={0}
     >
       <View style={styles.overlay} />
       <SafeAreaView style={styles.container}>

@@ -106,13 +106,20 @@ export const HomeScreen: React.FC = () => {
         setIsLoading(true);
         setLoadingMessage('Konum izni kontrol ediliyor...');
         
-        // Önce izin durumunu kontrol et
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        // Önce mevcut izin durumunu kontrol et
+        const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+        let finalStatus = existingStatus;
         
-        if (status !== 'granted') {
+        // İzin yoksa iste
+        if (existingStatus !== 'granted') {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          finalStatus = status;
+        }
+        
+        if (finalStatus !== 'granted') {
           console.log('Konum izni verilmedi');
           setLoadingMessage('Varsayılan şehir kullanılıyor...');
-          setLocation('Konum izni verilmedi - Varsayılan: Istanbul');
+          setLocation('Varsayılan: Istanbul');
           
           // İzin yoksa varsayılan şehir için vakitleri çek
           const times = await getTodayPrayerTimes('Istanbul');
@@ -132,13 +139,13 @@ export const HomeScreen: React.FC = () => {
 
         console.log('Konum alınıyor...');
         setLoadingMessage('Konum bilgisi alınıyor...');
-        // Emülatör için timeout ekle (5 saniye)
+        // Android için daha uzun timeout (15 saniye)
         const locationPromise = Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Low, // Emülatörde daha hızlı
+          accuracy: Location.Accuracy.Balanced, // Android için daha uygun
         });
         
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Konum timeout')), 5000)
+          setTimeout(() => reject(new Error('Konum timeout')), 15000)
         );
         
         const location = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
@@ -240,6 +247,7 @@ export const HomeScreen: React.FC = () => {
       source={require('../../assets/images/backgroundImg.png')}
       style={styles.background}
       resizeMode="cover"
+      fadeDuration={0}
     >
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="light-content" />

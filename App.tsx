@@ -1,20 +1,82 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { Asset } from 'expo-asset';
 import { BlurView } from 'expo-blur';
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Platform, StyleSheet, View } from 'react-native';
 
 import { CompassScreen } from './src/screens/CompassScreen';
-import { DualarScreen } from './src/screens/DualarScreen';
+import DuaDetailScreen from './src/screens/DuaDetailScreen';
+import DualarScreen from './src/screens/DualarScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ZikirmatikScreen } from './src/screens/ZikirmatikScreen';
 
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+// Resimleri önceden yükle
+const cacheImages = (images: any[]) => {
+  return images.map(image => {
+    if (typeof image === 'string') {
+      return Image.prefetch(image);
+    } else {
+      return Asset.fromModule(image).downloadAsync();
+    }
+  });
+};
+
+function DualarStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DualarMain" component={DualarScreen} />
+      <Stack.Screen 
+        name="DuaDetail" 
+        component={DuaDetailScreen}
+        options={{
+          presentation: 'modal',
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
 
 export default function App() {
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    async function loadResourcesAndDataAsync() {
+      try {
+        // Tüm arka plan resimlerini önceden yükle
+        const imageAssets = cacheImages([
+          require('./assets/images/backgroundImg.png'),
+          require('./assets/images/kabeMorning.png'),
+          require('./assets/images/kabeNight.png'),
+          require('./assets/images/kabeSunset.png'),
+        ]);
+
+        await Promise.all([...imageAssets]);
+      } catch (e) {
+        console.warn('Resim yükleme hatası:', e);
+      } finally {
+        setIsReady(true);
+      }
+    }
+
+    loadResourcesAndDataAsync();
+  }, []);
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+        <ActivityIndicator size="large" color="#FFD700" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -27,23 +89,18 @@ export default function App() {
           tabBarShowLabel: true,
           tabBarLabelStyle: styles.tabBarLabel,
           tabBarIcon: ({ focused, color, size }) => {
-            let iconName: keyof typeof Ionicons.glyphMap;
-
             if (route.name === 'Ana Sayfa') {
-              iconName = focused ? 'home' : 'home-outline';
+              return <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />;
             } else if (route.name === 'Dualar') {
-              iconName = focused ? 'book' : 'book-outline';
+              return <Ionicons name={focused ? 'book' : 'book-outline'} size={size} color={color} />;
             } else if (route.name === 'Zikirmatik') {
-              iconName = focused ? 'list' : 'list-outline';
+              return <MaterialCommunityIcons name={focused ? 'counter' : 'counter'} size={size} color={color} />;
             } else if (route.name === 'Pusula') {
-              iconName = focused ? 'compass' : 'compass-outline';
+              return <MaterialCommunityIcons name="compass" size={size} color={color} />;
             } else if (route.name === 'Ayarlar') {
-              iconName = focused ? 'settings' : 'settings-outline';
-            } else {
-              iconName = 'help-outline';
+              return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />;
             }
-
-            return <Ionicons name={iconName} size={size} color={color} />;
+            return <Ionicons name="help-circle-outline" size={size} color={color} />;
           },
           tabBarBackground: () => (
             Platform.OS === 'ios' ? (
@@ -65,7 +122,7 @@ export default function App() {
         />
         <Tab.Screen
           name="Dualar"
-          component={DualarScreen}
+          component={DualarStack}
           options={{
             tabBarLabel: 'Dualar',
           }}

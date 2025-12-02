@@ -2,30 +2,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import {
-    ImageBackground,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ImageBackground,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { PRAYERS } from '../src/data/prayers';
 
 export default function DuaDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, name, arabic, turkish, meaning } = useLocalSearchParams();
   const router = useRouter();
-  
-  const prayer = PRAYERS.find((p) => p.id === id);
 
-  if (!prayer) {
+  if (!name) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Dua bulunamadı.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Geri Dön</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <ImageBackground
+        source={require('../assets/images/backgroundImg.png')}
+        style={styles.background}
+        resizeMode="cover"
+      >
+        <View style={styles.overlay} />
+        <SafeAreaView style={styles.container}>
+          <Text style={styles.errorText}>Dua bilgisi bulunamadı.</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Geri Dön</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -42,25 +46,27 @@ export default function DuaDetailScreen() {
             <Ionicons name="close-circle" size={32} color="#FFD700" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Dua Detayı</Text>
-          <View style={{ width: 32 }} /> 
+          <View style={{ width: 32 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
-            <Text style={styles.title}>{prayer.title}</Text>
+            <Text style={styles.title}>{name}</Text>
+            
+            <View style={styles.divider} />
+            
+            <Text style={styles.label}>Arapça:</Text>
+            <Text style={styles.arabic}>{arabic}</Text>
             
             <View style={styles.divider} />
             
             <Text style={styles.label}>Okunuşu:</Text>
-            <Text style={styles.text}>{prayer.content}</Text>
+            <Text style={styles.turkish}>{turkish}</Text>
             
-            {prayer.meaning && (
-              <>
-                <View style={styles.divider} />
-                <Text style={styles.label}>Anlamı:</Text>
-                <Text style={styles.meaning}>{prayer.meaning}</Text>
-              </>
-            )}
+            <View style={styles.divider} />
+            
+            <Text style={styles.label}>Anlamı:</Text>
+            <Text style={styles.meaning}>{meaning}</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -98,6 +104,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: 'rgba(30, 30, 30, 0.9)',
@@ -111,7 +118,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFD700',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   divider: {
     height: 1,
@@ -125,17 +132,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
   },
-  text: {
+  arabic: {
+    fontSize: 22,
+    color: '#FFFFFF',
+    lineHeight: 36,
+    textAlign: 'right',
+    fontFamily: 'serif',
+  },
+  turkish: {
     fontSize: 18,
     color: '#FFFFFF',
     lineHeight: 28,
-    marginBottom: 8,
+    textAlign: 'center',
   },
   meaning: {
     fontSize: 16,
     color: '#DDDDDD',
     fontStyle: 'italic',
     lineHeight: 24,
+    textAlign: 'center',
   },
   errorText: {
     color: 'white',
@@ -146,12 +161,14 @@ const styles = StyleSheet.create({
   backButton: {
     marginTop: 20,
     alignSelf: 'center',
-    padding: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     backgroundColor: '#FFD700',
     borderRadius: 8,
   },
   backButtonText: {
     color: 'black',
     fontWeight: 'bold',
+    fontSize: 16,
   },
 });
