@@ -5,6 +5,8 @@ const DIYANET_BASE_URL = 'https://api.collectapi.com/pray/all';
 const FALLBACK_API = 'https://api.aladhan.com/v1/timingsByCity';
 const CACHE_KEY_PREFIX = 'prayer_times_';
 const CACHE_VERSION = 'v2_';
+const LAST_PRAYER_CACHE_KEY = 'last_prayer_times_backup';
+const LAST_CITY_CACHE_KEY = 'last_city_used';
 
 export interface PrayerTimesResponse {
   imsak: string;
@@ -67,6 +69,45 @@ const getCachedMonthlyTimes = async (
     return data.data;
   } catch (error) {
     console.error('Cache okuma hatası:', error);
+    return null;
+  }
+};
+
+/**
+ * Son kullanılan namaz vakitlerini yedek olarak kaydet
+ */
+const saveLastPrayerCache = async (city: string, data: PrayerTimes): Promise<void> => {
+  try {
+    const backupData = {
+      city,
+      data,
+      cachedAt: Date.now(),
+    };
+    
+    await AsyncStorage.multiSet([
+      [LAST_PRAYER_CACHE_KEY, JSON.stringify(backupData)],
+      [LAST_CITY_CACHE_KEY, city],
+    ]);
+    
+    console.log('✅ Son vakitler yedeklendi:', city);
+  } catch (error) {
+    console.error('❌ Yedek cache hatası:', error);
+  }
+};
+
+/**
+ * Son yedeklenen namaz vakitlerini al
+ */
+const getLastPrayerCache = async (): Promise<{ city: string; data: PrayerTimes; cachedAt: number } | null> => {
+  try {
+    const cached = await AsyncStorage.getItem(LAST_PRAYER_CACHE_KEY);
+    if (!cached) return null;
+    
+    const parsed = JSON.parse(cached);
+    console.log('📦 Son yedek cache kullanılıyor:', parsed.city);
+    return parsed;
+  } catch (error) {
+    console.error('❌ Yedek cache okuma hatası:', error);
     return null;
   }
 };
@@ -163,27 +204,55 @@ export const getMonthlyPrayerTimes = async (
 };
 
 /**
- * Bugünün namaz vakitlerini al (cache'den veya API'den)
+ * Bugünün namaz vakitlerini al (akıllı cache sistemi)
+ * 1. Konum varsa → API'den çek, cache'e kaydet
+ * 2. Konum yoksa → son cache'i kullan
  */
-export const getTodayPrayerTimes = async (city: string): Promise<PrayerTimesResponse | null> => {
+export const getTodayPrayerTimes = async (city: string | null): Promise<PrayerTimesResponse | null> => {
   const now = new Date();
   const year = now.getFullYear();
-  const month = now.getMonth() + 1; // 0-11 -> 1-12
+  const month = now.getMonth() + 1;
   const day = now.getDate();
 
-  console.log(`📅 Bugün: ${year}/${month}/${day} - Şehir: ${city}`);
+  console.log(`📅 Bugün: ${year}/${month}/${day} - Şehir: ${city || 'Bilinmiyor'}`);
 
-  // Aylık vakitleri al
+  // Eğer konum yoksa, son yedeklenen cache'i kullan
+  if (!city) {
+    console.log('⚠️ Konum bilgisi yok, son cache kullanılıyor');
+    const lastCache = await getLastPrayerCache();
+    
+    if (lastCache) {
+      const cacheAge = Math.floor((Date.now() - lastCache.cachedAt) / (1000 * 60 * 60)); // saat cinsinden
+      console.log(`📦 Son yedek cache: ${lastCache.city} (${cacheAge} saat önce)`);
+      return lastCache.data;
+    }
+    
+    console.log('❌ Hiç cache yok');
+    return null;
+  }
+
+  // Konum varsa, aylık vakitleri al
   const monthlyTimes = await getMonthlyPrayerTimes(city, year, month);
   
   if (monthlyTimes && monthlyTimes[day]) {
     console.log('✅ Bugünün vakitleri CACHE\'den alındı');
+    
+    // Başarılı veriyi yedekle
+    await saveLastPrayerCache(city, monthlyTimes[day]);
+    
     return monthlyTimes[day];
   }
 
-  // Cache yoksa fallback API'ye geç
+  // Cache yoksa API'ye geç
   console.log('⚠️ Cache\'de veri yok, fallback API kullanılıyor');
-  return await getPrayerTimesByCity(city);
+  const apiResult = await getPrayerTimesByCity(city);
+  
+  if (apiResult) {
+    // API'den gelen veriyi yedekle
+    await saveLastPrayerCache(city, apiResult);
+  }
+  
+  return apiResult;
 };
 export const getPrayerTimesByCity = async (city: string): Promise<PrayerTimesResponse | null> => {
   try {
@@ -579,17 +648,38 @@ export const getWeeklyPrayerTimes = async (
 };
 
 /**
- * Bugünün ezan vakitlerini haftalık veriden al
+ * Bugünün ezan vakitlerini haftalık veriden al (akıllı cache sistemi)
+ * 1. Konum varsa → haftalık veri al, cache'e kaydet
+ * 2. Konum yoksa → son cache'i kullan
  */
 export const getTodayFromWeeklyTimes = async (
-  city: string,
+  city: string | null,
   country: string = 'Turkey'
 ): Promise<PrayerTimesResponse | null> => {
   try {
+    // Eğer konum yoksa, son yedeklenen cache'i kullan
+    if (!city) {
+      console.log('⚠️ Konum bilgisi yok, son cache kullanılıyor');
+      const lastCache = await getLastPrayerCache();
+      
+      if (lastCache) {
+        const cacheAge = Math.floor((Date.now() - lastCache.cachedAt) / (1000 * 60 * 60));
+        console.log(`📦 Son yedek cache: ${lastCache.city} (${cacheAge} saat önce)`);
+        return lastCache.data;
+      }
+      
+      console.log('❌ Hiç cache yok');
+      return null;
+    }
+
+    // Konum varsa haftalık veriyi al
     const weeklyData = await getWeeklyPrayerTimes(city, country);
     
     if (!weeklyData) {
-      return null;
+      // API başarısız, son cache'i dene
+      console.log('⚠️ Haftalık veri alınamadı, son cache kullanılıyor');
+      const lastCache = await getLastPrayerCache();
+      return lastCache ? lastCache.data : null;
     }
 
     const today = toISODate(new Date());
@@ -597,10 +687,11 @@ export const getTodayFromWeeklyTimes = async (
     
     if (!todayData) {
       console.warn('⚠️ Bugünün verisi haftalık veride bulunamadı');
-      return null;
+      const lastCache = await getLastPrayerCache();
+      return lastCache ? lastCache.data : null;
     }
 
-    return {
+    const result = {
       imsak: todayData.timings.imsak,
       gunes: todayData.timings.gunes,
       ogle: todayData.timings.ogle,
@@ -608,8 +699,17 @@ export const getTodayFromWeeklyTimes = async (
       aksam: todayData.timings.aksam,
       yatsi: todayData.timings.yatsi,
     };
+
+    // Başarılı veriyi yedekle
+    await saveLastPrayerCache(city, result);
+    
+    return result;
   } catch (error) {
     console.error('❌ Bugünün vakitleri alınamadı:', error);
-    return null;
+    
+    // Hata durumunda son cache'i kullan
+    const lastCache = await getLastPrayerCache();
+    return lastCache ? lastCache.data : null;
   }
 };
+

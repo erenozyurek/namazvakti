@@ -5,7 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Asset } from 'expo-asset';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
 import { CompassScreen } from './src/screens/CompassScreen';
 import DuaDetailScreen from './src/screens/DuaDetailScreen';
@@ -18,15 +18,27 @@ import { ZikirmatikScreen } from './src/screens/ZikirmatikScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Resimleri önceden yükle
-const cacheImages = (images: any[]) => {
-  return images.map(image => {
-    if (typeof image === 'string') {
-      return Image.prefetch(image);
-    } else {
+// Tüm background resimlerini başta tanımla
+const BACKGROUND_IMAGE = require('./assets/images/backgroundImg.png');
+const KABE_MORNING = require('./assets/images/kabeMorning.png');
+const KABE_NIGHT = require('./assets/images/kabeNight.png');
+const KABE_SUNSET = require('./assets/images/kabeSunset.png');
+
+// Resimleri önceden yükle ve cache'le
+const cacheImages = async () => {
+  const images = [BACKGROUND_IMAGE, KABE_MORNING, KABE_NIGHT, KABE_SUNSET];
+  
+  try {
+    const cachePromises = images.map(image => {
       return Asset.fromModule(image).downloadAsync();
-    }
-  });
+    });
+    
+    await Promise.all(cachePromises);
+    return true;
+  } catch (e) {
+    console.warn('Resim yükleme hatası:', e);
+    return false;
+  }
 };
 
 function DualarStack() {
@@ -51,14 +63,7 @@ export default function App() {
     async function loadResourcesAndDataAsync() {
       try {
         // Tüm arka plan resimlerini önceden yükle
-        const imageAssets = cacheImages([
-          require('./assets/images/backgroundImg.png'),
-          require('./assets/images/kabeMorning.png'),
-          require('./assets/images/kabeNight.png'),
-          require('./assets/images/kabeSunset.png'),
-        ]);
-
-        await Promise.all([...imageAssets]);
+        await cacheImages();
       } catch (e) {
         console.warn('Resim yükleme hatası:', e);
       } finally {

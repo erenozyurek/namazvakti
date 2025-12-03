@@ -2,14 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  ImageBackground,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    ImageBackground,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { NextPrayerCard } from '../components/NextPrayerCard';
 import { PrayerCard } from '../components/PrayerCard';
@@ -117,12 +117,12 @@ export const HomeScreen: React.FC = () => {
         }
         
         if (finalStatus !== 'granted') {
-          console.log('Konum izni verilmedi');
-          setLoadingMessage('Varsayılan şehir kullanılıyor...');
-          setLocation('Varsayılan: Istanbul');
+          console.log('⚠️ Konum izni yok, son cache kullanılacak');
+          setLoadingMessage('Son kaydedilen vakitler yükleniyor...');
+          setLocation('Konum izni yok');
           
-          // İzin yoksa varsayılan şehir için vakitleri çek
-          const times = await getTodayPrayerTimes('Istanbul');
+          // İzin yoksa son cache'i kullan (city = null)
+          const times = await getTodayPrayerTimes(null);
           if (times) {
             setPrayerTimes([
               { name: 'İmsak', time: times.imsak },
@@ -132,12 +132,26 @@ export const HomeScreen: React.FC = () => {
               { name: 'Akşam', time: times.aksam },
               { name: 'Yatsı', time: times.yatsi },
             ]);
+          } else {
+            // Hiç cache yoksa varsayılan şehir kullan
+            setLocation('Varsayılan: Istanbul');
+            const defaultTimes = await getTodayPrayerTimes('Istanbul');
+            if (defaultTimes) {
+              setPrayerTimes([
+                { name: 'İmsak', time: defaultTimes.imsak },
+                { name: 'Güneş', time: defaultTimes.gunes },
+                { name: 'Öğle', time: defaultTimes.ogle },
+                { name: 'İkindi', time: defaultTimes.ikindi },
+                { name: 'Akşam', time: defaultTimes.aksam },
+                { name: 'Yatsı', time: defaultTimes.yatsi },
+              ]);
+            }
           }
           setIsLoading(false);
           return;
         }
 
-        console.log('Konum alınıyor...');
+        console.log('📍 Konum alınıyor...');
         setLoadingMessage('Konum bilgisi alınıyor...');
         // Android için daha uzun timeout (15 saniye)
         const locationPromise = Location.getCurrentPositionAsync({
@@ -150,14 +164,14 @@ export const HomeScreen: React.FC = () => {
         
         const location = await Promise.race([locationPromise, timeoutPromise]) as Location.LocationObject;
 
-        console.log('Konum alındı:', location.coords);
+        console.log('✅ Konum alındı:', location.coords);
 
         const [address] = await Location.reverseGeocodeAsync({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
 
-        console.log('Adres:', address);
+        console.log('📍 Adres:', address);
 
         let cityName = 'Istanbul'; // Varsayılan şehir
         
@@ -175,13 +189,13 @@ export const HomeScreen: React.FC = () => {
           setLocation('Istanbul, Türkiye (Varsayılan)');
         }
 
-        console.log('Vakitler çekiliyor, şehir:', cityName);
+        console.log('🕌 Vakitler çekiliyor, şehir:', cityName);
         setLoadingMessage('Namaz vakitleri alınıyor...');
 
-        // Namaz vakitlerini çek (cache'den veya API'den)
+        // Namaz vakitlerini çek (cache'den veya API'den) + OTOMATIK YEDEKLEME
         const times = await getTodayPrayerTimes(cityName);
         
-        console.log('API yanıtı:', times);
+        console.log('✅ API yanıtı:', times);
         
         if (times) {
           setPrayerTimes([
@@ -201,26 +215,39 @@ export const HomeScreen: React.FC = () => {
         
         setIsLoading(false);
       } catch (error) {
-        console.error('Konum ve vakitler alınamadı:', error);
-        setLoadingMessage('Varsayılan vakitler yükleniyor...');
+        console.error('❌ Konum ve vakitler alınamadı:', error);
+        setLoadingMessage('Son kaydedilen vakitler yükleniyor...');
         
-        // Hata durumunda varsayılan şehir için vakitleri çek
-        setLocation('Istanbul, Türkiye (Konum alınamadı)');
-        
+        // Hata durumunda önce son cache'i dene
         try {
-          const times = await getTodayPrayerTimes('Istanbul');
-          if (times) {
+          const cachedTimes = await getTodayPrayerTimes(null);
+          if (cachedTimes) {
+            setLocation('Konum alınamadı (Cache kullanılıyor)');
             setPrayerTimes([
-              { name: 'İmsak', time: times.imsak },
-              { name: 'Güneş', time: times.gunes },
-              { name: 'Öğle', time: times.ogle },
-              { name: 'İkindi', time: times.ikindi },
-              { name: 'Akşam', time: times.aksam },
-              { name: 'Yatsı', time: times.yatsi },
+              { name: 'İmsak', time: cachedTimes.imsak },
+              { name: 'Güneş', time: cachedTimes.gunes },
+              { name: 'Öğle', time: cachedTimes.ogle },
+              { name: 'İkindi', time: cachedTimes.ikindi },
+              { name: 'Akşam', time: cachedTimes.aksam },
+              { name: 'Yatsı', time: cachedTimes.yatsi },
             ]);
+          } else {
+            // Cache de yoksa varsayılan şehir
+            setLocation('Istanbul, Türkiye (Varsayılan)');
+            const times = await getTodayPrayerTimes('Istanbul');
+            if (times) {
+              setPrayerTimes([
+                { name: 'İmsak', time: times.imsak },
+                { name: 'Güneş', time: times.gunes },
+                { name: 'Öğle', time: times.ogle },
+                { name: 'İkindi', time: times.ikindi },
+                { name: 'Akşam', time: times.aksam },
+                { name: 'Yatsı', time: times.yatsi },
+              ]);
+            }
           }
         } catch (fallbackError) {
-          console.error('Varsayılan vakitler de alınamadı:', fallbackError);
+          console.error('❌ Fallback vakitler de alınamadı:', fallbackError);
         }
         
         setIsLoading(false);
