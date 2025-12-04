@@ -7,6 +7,7 @@ const CACHE_KEY_PREFIX = 'prayer_times_';
 const CACHE_VERSION = 'v2_';
 const LAST_PRAYER_CACHE_KEY = 'last_prayer_times_backup';
 const LAST_CITY_CACHE_KEY = 'last_city_used';
+const LAST_FETCH_TIME_KEY = 'last_fetch_time';
 
 export interface PrayerTimesResponse {
   imsak: string;
@@ -18,6 +19,9 @@ export interface PrayerTimesResponse {
   HicriTarihUzun?: string;
   MiladiTarihKisa?: string;
 }
+
+// Alias for internal use
+type PrayerTimes = PrayerTimesResponse;
 
 export interface MonthlyPrayerTimes {
   [day: string]: PrayerTimesResponse;
@@ -39,7 +43,7 @@ export interface LocationData {
 /**
  * Cache'den aylık vakitleri al
  */
-const getCachedMonthlyTimes = async (
+export const getCachedMonthlyTimes = async (
   city: string,
   year: number,
   month: number
@@ -110,6 +114,38 @@ const getLastPrayerCache = async (): Promise<{ city: string; data: PrayerTimes; 
     console.error('❌ Yedek cache okuma hatası:', error);
     return null;
   }
+};
+
+/**
+ * Son kullanılan şehri al
+ */
+export const getLastCachedCity = async (): Promise<string | null> => {
+  try {
+    const city = await AsyncStorage.getItem(LAST_CITY_CACHE_KEY);
+    return city;
+  } catch (error) {
+    console.error('❌ Son şehir okuma hatası:', error);
+    return null;
+  }
+};
+
+/**
+ * Şehirlerin aynı olup olmadığını kontrol et (Türkçe karakter toleranslı)
+ */
+export const isSameCity = (city1: string | null, city2: string | null): boolean => {
+  if (!city1 || !city2) return false;
+  
+  const normalize = (city: string) => city
+    .toLowerCase()
+    .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
+    .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
+    .replace(/Ü/g, 'u').replace(/ü/g, 'u')
+    .replace(/Ş/g, 's').replace(/ş/g, 's')
+    .replace(/Ö/g, 'o').replace(/ö/g, 'o')
+    .replace(/Ç/g, 'c').replace(/ç/g, 'c')
+    .trim();
+  
+  return normalize(city1) === normalize(city2);
 };
 
 /**
@@ -201,6 +237,97 @@ export const getMonthlyPrayerTimes = async (
     console.error('Aylık vakitler alınamadı:', error);
     return null;
   }
+};
+
+/**
+ * AKILLI NAMAZ VAKİTLERİ SİSTEMİ
+ * 
+ * Bu fonksiyon gereksiz API çağrılarını önler:
+ * 1. Önce son kullanılan şehri kontrol eder
+ * 2. Mevcut şehir == Son şehir ise → Cache'den al (API çağrısı YOK)
+ * 3. Şehir değiştiyse veya cache yoksa → API'den çek
+ * 
+ * @param currentCity - Kullanıcının mevcut konumundan alınan şehir
+ * @returns Namaz vakitleri veya null
+ */
+export const getSmartPrayerTimes = async (currentCity: string): Promise<{
+  times: PrayerTimesResponse | null;
+  fromCache: boolean;
+  cityChanged: boolean;
+}> => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+
+  console.log('🧠 Akıllı Namaz Vakitleri Sistemi Başlatıldı');
+  console.log(`📍 Mevcut Şehir: ${currentCity}`);
+
+  // 1. Son kullanılan şehri kontrol et
+  const lastCity = await getLastCachedCity();
+  console.log(`📦 Son Kaydedilen Şehir: ${lastCity || 'Yok'}`);
+
+  // 2. Şehir aynı mı kontrol et
+  const cityIsSame = isSameCity(currentCity, lastCity);
+  
+  if (cityIsSame) {
+    console.log('✅ Şehir aynı, cache kontrol ediliyor...');
+    
+    // Aylık cache'i kontrol et
+    const monthlyTimes = await getCachedMonthlyTimes(currentCity, year, month);
+    
+    if (monthlyTimes && monthlyTimes[day]) {
+      console.log('🎉 Cache\'den veri alındı - API ÇAĞRISI YAPILMADI');
+      return {
+        times: monthlyTimes[day],
+        fromCache: true,
+        cityChanged: false,
+      };
+    }
+    
+    console.log('⚠️ Aynı şehir ama cache yok/eski, API çağrılacak');
+  } else {
+    console.log('🔄 Şehir değişti! Yeni vakitler çekilecek');
+  }
+
+  // 3. API'den çek (şehir değişti veya cache yok)
+  console.log(`🌐 API'den vakitler çekiliyor: ${currentCity}`);
+  
+  const monthlyTimes = await getMonthlyPrayerTimes(currentCity, year, month);
+  
+  if (monthlyTimes && monthlyTimes[day]) {
+    // Yeni şehri ve vakitleri kaydet
+    await saveLastPrayerCache(currentCity, monthlyTimes[day]);
+    
+    console.log('✅ Vakitler API\'den alındı ve cache\'e kaydedildi');
+    return {
+      times: monthlyTimes[day],
+      fromCache: false,
+      cityChanged: !cityIsSame,
+    };
+  }
+
+  // 4. Aylık API başarısız, günlük API dene
+  console.log('⚠️ Aylık API başarısız, günlük API deneniyor...');
+  const dailyTimes = await getPrayerTimesByCity(currentCity);
+  
+  if (dailyTimes) {
+    await saveLastPrayerCache(currentCity, dailyTimes);
+    return {
+      times: dailyTimes,
+      fromCache: false,
+      cityChanged: !cityIsSame,
+    };
+  }
+
+  // 5. Tüm API'ler başarısız, son cache'i dön
+  console.log('❌ API başarısız, son cache kullanılıyor');
+  const lastCache = await getLastPrayerCache();
+  return {
+    times: lastCache?.data || null,
+    fromCache: true,
+    cityChanged: false,
+  };
 };
 
 /**

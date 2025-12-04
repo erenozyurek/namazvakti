@@ -2,19 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    ImageBackground,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  ImageBackground,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { NextPrayerCard } from '../components/NextPrayerCard';
 import { PrayerCard } from '../components/PrayerCard';
 import { preloadNextMonth } from '../services/cacheManager';
-import { getCityFromCoordinates, getTodayPrayerTimes } from '../services/prayerService';
+import { getCityFromCoordinates, getSmartPrayerTimes, getTodayPrayerTimes } from '../services/prayerService';
 
 interface PrayerTime {
   name: string;
@@ -192,25 +192,34 @@ export const HomeScreen: React.FC = () => {
         console.log('🕌 Vakitler çekiliyor, şehir:', cityName);
         setLoadingMessage('Namaz vakitleri alınıyor...');
 
-        // Namaz vakitlerini çek (cache'den veya API'den) + OTOMATIK YEDEKLEME
-        const times = await getTodayPrayerTimes(cityName);
+        // 🧠 AKILLI SİSTEM: Şehir aynıysa cache'den, değiştiyse API'den al
+        const result = await getSmartPrayerTimes(cityName);
         
-        console.log('✅ API yanıtı:', times);
+        if (result.fromCache) {
+          console.log('🎉 Vakitler CACHE\'den alındı - API çağrısı YAPILMADI');
+        } else {
+          console.log('🌐 Vakitler API\'den alındı');
+          if (result.cityChanged) {
+            console.log('🔄 Şehir değiştiği için yeni vakitler çekildi');
+          }
+        }
         
-        if (times) {
+        if (result.times) {
           setPrayerTimes([
-            { name: 'İmsak', time: times.imsak },
-            { name: 'Güneş', time: times.gunes },
-            { name: 'Öğle', time: times.ogle },
-            { name: 'İkindi', time: times.ikindi },
-            { name: 'Akşam', time: times.aksam },
-            { name: 'Yatsı', time: times.yatsi },
+            { name: 'İmsak', time: result.times.imsak },
+            { name: 'Güneş', time: result.times.gunes },
+            { name: 'Öğle', time: result.times.ogle },
+            { name: 'İkindi', time: result.times.ikindi },
+            { name: 'Akşam', time: result.times.aksam },
+            { name: 'Yatsı', time: result.times.yatsi },
           ]);
           
-          // Arka planda gelecek ayın vakitlerini önceden yükle
-          preloadNextMonth(cityName).catch((err: Error) => 
-            console.log('Gelecek ay yükleme hatası:', err.message)
-          );
+          // Arka planda gelecek ayın vakitlerini önceden yükle (sadece API'den çektiyse)
+          if (!result.fromCache) {
+            preloadNextMonth(cityName).catch((err: Error) => 
+              console.log('Gelecek ay yükleme hatası:', err.message)
+            );
+          }
         }
         
         setIsLoading(false);
